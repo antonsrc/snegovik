@@ -1,10 +1,10 @@
 {
-  "dependencies": {
-    "three": "^0.158.0"
-  },
-  "devDependencies": {
-    "webpack": "^5.89.0",
-    "webpack-cli": "^5.1.4"
-  },
-  "private": true
+    "dependencies": {
+        "three": "^0.158.0"
+    },
+    "devDependencies": {
+        "webpack": "^5.89.0",
+        "webpack-cli": "^5.1.4"
+    },
+    "private": true
 }

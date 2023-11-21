@@ -7,6 +7,19 @@
     <title>Medved</title>
 </head>
 <body>
-    <script type="module" src="./public/bundle.js"></script>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "./public/engine/three.module.js"
+            }
+        }
+    </script>
+    <script type="module" src="./src/main.js"></script>
+
+    <!-- OR -->
+
+    <!-- <script type="module" src="./public/bundle.js"></script> -->
+
 </body>
 </html>
