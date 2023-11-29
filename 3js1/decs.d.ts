@@ -1,7 +1,0 @@
-declare module "*.js"
-declare module "*.mp3"
-declare module "*.wav"
-declare module "*.vrm"
-declare module "*.png"
-declare module "*.jpg"
-declare module "*.glsl"
