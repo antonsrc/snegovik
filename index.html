@@ -1,25 +1,16 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="./public/style.css">
-    <title>Medved</title>
+    <title>Snegovik</title>
+    <style>
+        body {
+            margin: 0px;
+        }
+    </style>
 </head>
 <body>
-    <canvas id="canv"></canvas>
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "./public/engine/three.module.js"
-            }
-        }
-    </script>
-    <script type="module" src="./src/main.js"></script>
-
-    <!-- OR -->
-
-    <!-- <script type="module" src="./public/bundle.js"></script> -->
-
+    <script src="./public/src/bundle.js"></script>
 </body>
 </html>
