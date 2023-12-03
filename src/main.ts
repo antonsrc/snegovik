@@ -74,7 +74,7 @@ generateFloor()
 // MODEL WITH ANIMATIONS
 let playerControls: PlayerControls
 const loader = new GLTFLoader();
-loader.load('./models/Soldier.glb', function (gltf) {
+loader.load('./public/models/Soldier.glb', function (gltf) {
     const model = gltf.scene;
     model.traverse(function (object: any) {
         if (object.isMesh) object.castShadow = true;
@@ -113,11 +113,11 @@ animate();
 function generateFloor() {
     // TEXTURES
     const textureLoader = new THREE.TextureLoader();
-    const placeholder = textureLoader.load("./textures/placeholder/placeholder.png");
-    const sandBaseColor = textureLoader.load("./textures/sand/Sand 002_COLOR.jpg");
-    const sandNormalMap = textureLoader.load("./textures/sand/Sand 002_NRM.jpg");
-    const sandHeightMap = textureLoader.load("./textures/sand/Sand 002_DISP.jpg");
-    const sandAmbientOcclusion = textureLoader.load("./textures/sand/Sand 002_OCC.jpg");
+    const placeholder = textureLoader.load("./public/textures/placeholder/placeholder.png");
+    const sandBaseColor = textureLoader.load("./public/textures/sand/Sand 002_COLOR.jpg");
+    const sandNormalMap = textureLoader.load("./public/textures/sand/Sand 002_NRM.jpg");
+    const sandHeightMap = textureLoader.load("./public/textures/sand/Sand 002_DISP.jpg");
+    const sandAmbientOcclusion = textureLoader.load("./public/textures/sand/Sand 002_OCC.jpg");
 
     const WIDTH = 80
     const LENGTH = 80

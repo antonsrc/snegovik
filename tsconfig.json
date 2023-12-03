@@ -4,7 +4,7 @@
         "module": "commonjs",
         "allowJs": true,
         "sourceMap": true,
-        "outDir": "./doc/src",
+        "outDir": "./public/src",
         "removeComments": true,
         "noImplicitAny": true,
     }
