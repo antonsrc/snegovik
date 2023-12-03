@@ -3,12 +3,10 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { PlayerControls } from './playerControls';
 
-// SCENE
-const scene = new THREE.Scene();
-scene.background = new THREE.Color("rgb(101, 130, 153)");
-
 // RENDERER
+const canvas = document.querySelector( '#c' );
 const rendererParameters = {
+    canvas,
     antialias: false
 };
 const renderer = new THREE.WebGLRenderer(rendererParameters);
@@ -16,6 +14,10 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.shadowMap.enabled = true;
 document.body.append(renderer.domElement);
+
+// SCENE
+const scene = new THREE.Scene();
+scene.background = new THREE.Color("rgb(101, 130, 153)");
 
 // CAMERA
 const aspectRatio = window.innerWidth / window.innerHeight;
@@ -72,7 +74,7 @@ generateFloor()
 // MODEL WITH ANIMATIONS
 let playerControls: PlayerControls
 const loader = new GLTFLoader();
-loader.load('../public/models/Soldier.glb', function (gltf) {
+loader.load('./models/Soldier.glb', function (gltf) {
     const model = gltf.scene;
     model.traverse(function (object: any) {
         if (object.isMesh) object.castShadow = true;
@@ -111,11 +113,11 @@ animate();
 function generateFloor() {
     // TEXTURES
     const textureLoader = new THREE.TextureLoader();
-    const placeholder = textureLoader.load("../public/textures/placeholder/placeholder.png");
-    const sandBaseColor = textureLoader.load("../public/textures/sand/Sand 002_COLOR.jpg");
-    const sandNormalMap = textureLoader.load("../public/textures/sand/Sand 002_NRM.jpg");
-    const sandHeightMap = textureLoader.load("../public/textures/sand/Sand 002_DISP.jpg");
-    const sandAmbientOcclusion = textureLoader.load("../public/textures/sand/Sand 002_OCC.jpg");
+    const placeholder = textureLoader.load("./textures/placeholder/placeholder.png");
+    const sandBaseColor = textureLoader.load("./textures/sand/Sand 002_COLOR.jpg");
+    const sandNormalMap = textureLoader.load("./textures/sand/Sand 002_NRM.jpg");
+    const sandHeightMap = textureLoader.load("./textures/sand/Sand 002_DISP.jpg");
+    const sandAmbientOcclusion = textureLoader.load("./textures/sand/Sand 002_OCC.jpg");
 
     const WIDTH = 80
     const LENGTH = 80
