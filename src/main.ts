@@ -51,25 +51,67 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // LIGHTS
-light()
+addLight(scene);
+
+// SKY
+addSky(scene);
 
 // FLOOR
-generateFloor()
+addFloor(scene);
+
+function addLight(scene: THREE.Scene) {
+    const ambLight = new THREE.DirectionalLight(0xffffff, 1);
+    scene.add(ambLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+    dirLight.position.set(-50, 100, 10);
+    dirLight.castShadow = true;
+    dirLight.shadow.camera.top = 50;
+    dirLight.shadow.camera.bottom = - 50;
+    dirLight.shadow.camera.left = - 50;
+    dirLight.shadow.camera.right = 50;
+    dirLight.shadow.camera.near = 0.1;
+    dirLight.shadow.camera.far = 200;
+    dirLight.shadow.mapSize.width = 4096;
+    dirLight.shadow.mapSize.height = 4096;
+    scene.add(dirLight);
+}
+
+function addSky(scene: THREE.Scene) {
+    const loader = new THREE.CubeTextureLoader();
+    loader.setPath('./public/textures/');
+    const textureCube = loader.load([
+        'stars.jpg', 'stars.jpg',
+        'stars.jpg', 'stars.jpg',
+        'stars.jpg', 'stars.jpg'
+    ]);
+    scene.background = textureCube;
+}
+
+function addFloor(scene: THREE.Scene) {
+    const width = 100;
+    const height = 100;
+    const geometry = new THREE.PlaneGeometry(width, height, 512, 512);
+    const material = new THREE.MeshBasicMaterial({
+        color: 0xe8ebff,
+        side: THREE.FrontSide
+    });
+    const floor = new THREE.Mesh(geometry, material);
+    floor.receiveShadow = true
+    floor.rotation.x = -Math.PI / 2
+    scene.add(floor);
+}
+
+
+
+
+
+
+
+
+
+
 
 // MODEL WITH ANIMATIONS
 let playerControls: PlayerControls
@@ -107,58 +149,3 @@ function animate() {
 }
 animate();
 
-
-
-
-function generateFloor() {
-    // TEXTURES
-    const textureLoader = new THREE.TextureLoader();
-    const placeholder = textureLoader.load("./public/textures/placeholder/placeholder.png");
-    const sandBaseColor = textureLoader.load("./public/textures/sand/Sand 002_COLOR.jpg");
-    const sandNormalMap = textureLoader.load("./public/textures/sand/Sand 002_NRM.jpg");
-    const sandHeightMap = textureLoader.load("./public/textures/sand/Sand 002_DISP.jpg");
-    const sandAmbientOcclusion = textureLoader.load("./public/textures/sand/Sand 002_OCC.jpg");
-
-    const WIDTH = 80
-    const LENGTH = 80
-
-    const geometry = new THREE.PlaneGeometry(WIDTH, LENGTH, 512, 512);
-    const material = new THREE.MeshStandardMaterial(
-        {
-            map: sandBaseColor, normalMap: sandNormalMap,
-            displacementMap: sandHeightMap, displacementScale: 0.1,
-            aoMap: sandAmbientOcclusion
-        })
-    wrapAndRepeatTexture(material.map)
-    wrapAndRepeatTexture(material.normalMap)
-    wrapAndRepeatTexture(material.displacementMap)
-    wrapAndRepeatTexture(material.aoMap)
-    // const material = new THREE.MeshPhongMaterial({ map: placeholder})
-
-    const floor = new THREE.Mesh(geometry, material)
-    floor.receiveShadow = true
-    floor.rotation.x = - Math.PI / 2
-    scene.add(floor)
-}
-
-function wrapAndRepeatTexture (map: THREE.Texture) {
-    map.wrapS = map.wrapT = THREE.RepeatWrapping
-    map.repeat.x = map.repeat.y = 10
-}
-
-function light() {
-    scene.add(new THREE.AmbientLight(0xffffff, 0.7))
-
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1)
-    dirLight.position.set(- 60, 100, - 10);
-    dirLight.castShadow = true;
-    dirLight.shadow.camera.top = 50;
-    dirLight.shadow.camera.bottom = - 50;
-    dirLight.shadow.camera.left = - 50;
-    dirLight.shadow.camera.right = 50;
-    dirLight.shadow.camera.near = 0.1;
-    dirLight.shadow.camera.far = 200;
-    dirLight.shadow.mapSize.width = 4096;
-    dirLight.shadow.mapSize.height = 4096;
-    scene.add(dirLight);
-}
