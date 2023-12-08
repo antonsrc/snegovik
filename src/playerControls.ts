@@ -53,11 +53,11 @@ export class PlayerControls {
 
         var play = '';
         if (directionPressed && keysPressed[SHIFT]) {
-            play = 'Run';
+            play = 'run';
         } else if (directionPressed) {
-            play = 'Walk'
+            play = 'walk'
         } else {
-            play = 'Idle'
+            play = 'idle'
         }
 
         if (this.currentAction != play) {
@@ -72,7 +72,7 @@ export class PlayerControls {
 
         this.mixer.update(delta)
 
-        if (this.currentAction == 'Run' || this.currentAction == 'Walk') {
+        if (this.currentAction == 'run' || this.currentAction == 'walk') {
             // calculate towards camera direction
             var angleYCameraDirection = Math.atan2(
                     (this.camera.position.x - this.model.position.x), 
@@ -91,7 +91,7 @@ export class PlayerControls {
             this.walkDirection.applyAxisAngle(this.rotateAngle, directionOffset)
 
             // run/walk velocity
-            const velocity = this.currentAction == 'Run' ? this.runVelocity : this.walkVelocity
+            const velocity = this.currentAction == 'run' ? this.runVelocity : this.walkVelocity
 
             // move model & camera
             const moveX = this.walkDirection.x * velocity * delta

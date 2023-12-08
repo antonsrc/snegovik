@@ -116,7 +116,7 @@ function addFloor(scene: THREE.Scene) {
 // MODEL WITH ANIMATIONS
 let playerControls: PlayerControls
 const loader = new GLTFLoader();
-loader.load('./public/models/Soldier.glb', function (gltf) {
+loader.load('./public/models/boxman.glb', function (gltf) {
     const model = gltf.scene;
     model.traverse(function (object: any) {
         if (object.isMesh) object.castShadow = true;
@@ -126,11 +126,14 @@ loader.load('./public/models/Soldier.glb', function (gltf) {
     const gltfAnimations: THREE.AnimationClip[] = gltf.animations;
     const mixer = new THREE.AnimationMixer(model);
     const animationsMap: Map<string, THREE.AnimationAction> = new Map()
-    gltfAnimations.filter(a => a.name != 'TPose').forEach((a: THREE.AnimationClip) => {
+    gltfAnimations.forEach((a: THREE.AnimationClip) => {
         animationsMap.set(a.name, mixer.clipAction(a))
     })
 
-    playerControls = new PlayerControls(model, mixer, animationsMap, orbitControls, camera,  'Idle');
+    model.scale.multiplyScalar(0.1);
+
+
+    playerControls = new PlayerControls(model, mixer, animationsMap, orbitControls, camera,  'idle');
 });
 
 
