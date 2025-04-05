@@ -1,23 +1,28 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Snegovik</title>
     <style>
-        html, body {
-            margin: 0;
-            height: 100%;
-        }
-        #c {
-            width: 100%;
-            height: 100%;
-            display: block;
-        }
-    </style>
-</head>
-<body>
-    <canvas id="c"></canvas>
-    <script src="./public/src/bundle.js"></script>
-</body>
+      body { margin: 0; overflow: hidden; }
+      canvas { display: block; }
+      #instructions {
+          position: absolute;
+          top: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          color: white;
+          background-color: rgba(0,0,0,0.5);
+          padding: 10px 20px;
+          border-radius: 5px;
+          font-family: Arial, sans-serif;
+      }
+  </style>
+  </head>
+  <body>
+    <div id="instructions">Click to lock controls. WASD to move. Move mouse to rotate camera. Press ESC to exit.</div>
+    
+    <script type="module" src="src/main.js"></script>
+  </body>
 </html>

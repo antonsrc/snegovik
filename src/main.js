@@ -1,334 +1,290 @@
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
-// ================================
-// RENDERER SETUP
-// ================================
-const canvas = document.querySelector("#c");
-const rendererParameters = {
-  canvas,
-  antialias: false, // Отключаем сглаживание для повышения производительности
-};
-const renderer = new THREE.WebGLRenderer(rendererParameters);
-renderer.setSize(window.innerWidth, window.innerHeight); // Устанавливаем размеры рендера
-renderer.setPixelRatio(window.devicePixelRatio); // Настройка плотности пикселей
-renderer.shadowMap.enabled = true; // Включаем тени
-document.body.append(renderer.domElement); // Добавляем элемент рендера в DOM
+// Сцена
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x333333);
 
-// ================================
-// SCENE AND CAMERA SETUP
-// ================================
-const scene = new THREE.Scene(); // Создаем сцену
-scene.background = new THREE.Color("rgb(101, 130, 153)"); // Устанавливаем фоновый цвет
+// Камера
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000
+);
+camera.position.set(0, 5, 5);
 
-// Настройка камеры
-const aspectRatio = window.innerWidth / window.innerHeight;
-const camera = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000); // Угол обзора, соотношение сторон, ближняя и дальняя плоскости отсечения
-camera.position.set(0, 2, 5); // Начальная позиция камеры (x, y, z)
+// Рендерер
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
 
-// ================================
-// ORBIT CONTROLS
-// ================================
-const orbitControls = new OrbitControls(camera, renderer.domElement); // Добавляем управление орбитой
-orbitControls.enableDamping = true; // Включаем затухание для плавного движения
-orbitControls.minDistance = 3; // Минимальное расстояние до объекта
-orbitControls.maxDistance = 15; // Максимальное расстояние до объекта
-orbitControls.enablePan = false; // Отключаем возможность перемещения камеры по экрану
-orbitControls.maxPolarAngle = (90 * Math.PI) / 180; // Ограничиваем угол наклона камеры
-orbitControls.update(); // Обновляем контроллер
+// Освещение
+const ambientLight = new THREE.AmbientLight(0x404040);
+scene.add(ambientLight);
 
-// ================================
-// KEYBOARD INPUT HANDLING
-// ================================
-const keysPressed = {}; // Храним состояние нажатых клавиш
-document.addEventListener("keydown", (event) => {
-  keysPressed[event.code] = true; // При нажатии клавиши добавляем её в объект
-});
-document.addEventListener("keyup", (event) => {
-  keysPressed[event.code] = false; // При отпускании клавиши удаляем её из объекта
-});
+const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+directionalLight.position.set(1, 10, 1);
+directionalLight.castShadow = true;
+directionalLight.shadow.mapSize.width = 2048;
+directionalLight.shadow.mapSize.height = 2048;
+scene.add(directionalLight);
 
-// ================================
-// WINDOW RESIZE HANDLING
-// ================================
-window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth / window.innerHeight; // Обновляем соотношение сторон камеры
-  camera.updateProjectionMatrix(); // Обновляем матрицу проекции
-  renderer.setSize(window.innerWidth, window.innerHeight); // Обновляем размеры рендера
-});
-
-// ================================
-// LIGHTS AND ENVIRONMENT
-// ================================
-addLight(scene); // Добавляем источники света
-addSky(scene); // Добавляем текстуру неба
-addGridFloor(scene); // Добавляем разлинованный пол
-
-// Функция для добавления источников света
-function addLight(scene) {
-  const ambLight = new THREE.DirectionalLight(0xffffff, 1); // Базовое освещение
-  scene.add(ambLight);
-
-  const dirLight = new THREE.DirectionalLight(0xffffff, 1); // Направленный источник света
-  dirLight.position.set(-50, 100, 10); // Позиция источника света
-  dirLight.castShadow = true; // Включаем тени
-  dirLight.shadow.camera.top = 50; // Настройка камеры теней
-  dirLight.shadow.camera.bottom = -50;
-  dirLight.shadow.camera.left = -50;
-  dirLight.shadow.camera.right = 50;
-  dirLight.shadow.camera.near = 0.1;
-  dirLight.shadow.camera.far = 200;
-  dirLight.shadow.mapSize.width = 4096; // Разрешение карты теней
-  dirLight.shadow.mapSize.height = 4096;
-  scene.add(dirLight);
-}
-
-// Функция для добавления текстуры неба
-function addSky(scene) {
-  const loader = new THREE.CubeTextureLoader();
-  loader.setPath("./public/textures/"); // Путь к текстурам
-  const textureCube = loader.load([
-    "stars.jpg",
-    "stars.jpg",
-    "stars.jpg",
-    "stars.jpg",
-    "stars.jpg",
-    "stars.jpg",
-  ]);
-  scene.background = textureCube; // Устанавливаем текстуру неба
-}
-
-// Функция для добавления разлинованного пола
-function addGridFloor(scene) {
-  const gridSize = 100; // Размер плоскости (в единицах)
-  const cellSize = 5; // Размер одной клетки
-  const divisions = gridSize / cellSize; // Количество клеток
-
-  // Создаем текстуру для клетчатого пола
-  const canvas = document.createElement("canvas");
-  canvas.width = 512;
-  canvas.height = 512;
-  const context = canvas.getContext("2d");
-
-  // Рисуем фон
-  context.fillStyle = "#ffffff"; // Белый фон
-  context.fillRect(0, 0, canvas.width, canvas.height);
-
-  // Рисуем сетку
-  const cellWidth = canvas.width / divisions;
-  const cellHeight = canvas.height / divisions;
-  context.strokeStyle = "#000000"; // Черные линии
-  context.lineWidth = 1;
-
-  for (let x = 0; x <= canvas.width; x += cellWidth) {
-    context.beginPath();
-    context.moveTo(x, 0);
-    context.lineTo(x, canvas.height);
-    context.stroke();
-  }
-
-  for (let y = 0; y <= canvas.height; y += cellHeight) {
-    context.beginPath();
-    context.moveTo(0, y);
-    context.lineTo(canvas.width, y);
-    context.stroke();
-  }
-
-  // Создаем материал с текстурой
-  const texture = new THREE.CanvasTexture(canvas);
-  const material = new THREE.MeshBasicMaterial({
-    map: texture,
-    side: THREE.DoubleSide, // Текстура видна с обеих сторон
-  });
-
-  // Создаем геометрию и добавляем пол
-  const geometry = new THREE.PlaneGeometry(gridSize, gridSize);
-  const floor = new THREE.Mesh(geometry, material);
-  floor.rotation.x = -Math.PI / 2; // Поворачиваем плоскость горизонтально
-  floor.receiveShadow = true; // Пол принимает тени
-  scene.add(floor);
-}
-
-// ================================
-// PLAYER CONTROLS FUNCTIONS
-// ================================
-const W = "KeyW";
-const A = "KeyA";
-const S = "KeyS";
-const D = "KeyD";
-const SHIFT = "ShiftLeft";
-const DIRECTIONS = [W, A, S, D];
-
-// Состояние игрока
-let playerState = {
-  model: null, // 3D-модель персонажа
-  mixer: null, // Микшер анимаций
-  animationsMap: new Map(), // Карта анимаций
-  orbitControl: orbitControls, // Управление камерой
-  camera: camera, // Камера
-  toggleRun: true, // Переключатель бега
-  currentAction: "idle", // Текущая анимация
-  walkDirection: new THREE.Vector3(), // Направление ходьбы
-  rotateAngle: new THREE.Vector3(0, 1, 0), // Ось вращения
-  rotateQuaternion: new THREE.Quaternion(), // Кватернион для вращения
-  cameraTarget: new THREE.Vector3(), // Цель камеры
-  fadeDuration: 0.2, // Длительность перехода между анимациями
-  runVelocity: 5, // Скорость бега
-  walkVelocity: 2, // Скорость ходьбы
-};
-
-// Инициализация управления персонажем
-function initPlayerControls(model, mixer, animationsMap, currentAction) {
-  playerState.model = model;
-  playerState.mixer = mixer;
-  playerState.animationsMap = animationsMap;
-  playerState.currentAction = currentAction;
-
-  // Запускаем начальную анимацию
-  const initialAnimation = animationsMap.get(currentAction);
-  if (initialAnimation) {
-    initialAnimation.play();
-  }
-
-  // Инициализируем цель камеры
-  updateCameraTarget(0, 0);
-}
-
-// Обновление состояния игрока
-function updatePlayer(delta, keysPressed) {
-  const directionPressed = DIRECTIONS.some((key) => keysPressed[key] === true);
-
-  let play = "";
-  if (directionPressed && keysPressed[SHIFT]) {
-    play = "run"; // Если нажата клавиша Shift, то бежим
-  } else if (directionPressed) {
-    play = "walk"; // Иначе ходим
-  } else {
-    play = "idle"; // Если ничего не нажато, стоим
-  }
-
-  // Переход между анимациями
-  if (playerState.currentAction !== play) {
-    const toPlay = playerState.animationsMap.get(play);
-    const current = playerState.animationsMap.get(playerState.currentAction);
-
-    if (current && toPlay) {
-      current.fadeOut(playerState.fadeDuration); // Плавно выключаем текущую анимацию
-      toPlay.reset().fadeIn(playerState.fadeDuration).play(); // Плавно включаем новую анимацию
-      playerState.currentAction = play; // Обновляем текущую анимацию
-    }
-  }
-
-  // Обновляем микшер анимаций
-  if (playerState.mixer) {
-    playerState.mixer.update(delta);
-  }
-
-  // Логика движения
-  if (play === "run" || play === "walk") {
-    const angleYCameraDirection = Math.atan2(
-      playerState.camera.position.x - playerState.model.position.x,
-      playerState.camera.position.z - playerState.model.position.z
-    );
-    const directionOffset = calculateDirectionOffset(keysPressed);
-
-    playerState.rotateQuaternion.setFromAxisAngle(
-      playerState.rotateAngle,
-      angleYCameraDirection + directionOffset
-    );
-    playerState.model.quaternion.rotateTowards(playerState.rotateQuaternion, 0.2);
-
-    playerState.camera.getWorldDirection(playerState.walkDirection);
-    playerState.walkDirection.y = 0;
-    playerState.walkDirection.normalize();
-    playerState.walkDirection.applyAxisAngle(playerState.rotateAngle, directionOffset);
-
-    const velocity = play === "run" ? playerState.runVelocity : playerState.walkVelocity;
-
-    const moveX = playerState.walkDirection.x * velocity * delta;
-    const moveZ = playerState.walkDirection.z * velocity * delta;
-    playerState.model.position.x += moveX;
-    playerState.model.position.z += moveZ;
-
-    updateCameraTarget(moveX, moveZ);
-  }
-}
-
-// Обновление цели камеры
-function updateCameraTarget(moveX, moveZ) {
-  if (!playerState.cameraTarget) {
-    console.error("cameraTarget is not initialized!");
-    return;
-  }
-
-  playerState.camera.position.x += moveX;
-  playerState.camera.position.z += moveZ;
-
-  playerState.cameraTarget.x = playerState.model.position.x;
-  playerState.cameraTarget.y = playerState.model.position.y + 1;
-  playerState.cameraTarget.z = playerState.model.position.z;
-  playerState.orbitControl.target = playerState.cameraTarget;
-}
-
-// Расчет направления движения
-function calculateDirectionOffset(keysPressed) {
-  let directionOffset = 0; // По умолчанию движемся вперед
-
-  if (keysPressed[W]) {
-    if (keysPressed[A]) {
-      directionOffset = Math.PI / 4; // w+a (вперед-влево)
-    } else if (keysPressed[D]) {
-      directionOffset = -Math.PI / 4; // w+d (вперед-вправо)
-    }
-  } else if (keysPressed[S]) {
-    if (keysPressed[A]) {
-      directionOffset = Math.PI / 4 + Math.PI / 2; // s+a (назад-влево)
-    } else if (keysPressed[D]) {
-      directionOffset = -Math.PI / 4 - Math.PI / 2; // s+d (назад-вправо)
-    } else {
-      directionOffset = Math.PI; // s (назад)
-    }
-  } else if (keysPressed[A]) {
-    directionOffset = Math.PI / 2; // a (влево)
-  } else if (keysPressed[D]) {
-    directionOffset = -Math.PI / 2; // d (вправо)
-  }
-
-  return directionOffset;
-}
-
-// ================================
-// LOAD MODEL AND ANIMATIONS
-// ================================
+// Заменяем куб на модель кота
+let target;
 const loader = new GLTFLoader();
-loader.load("./public/models/cat.glb", function (gltf) {
-  const model = gltf.scene;
-  model.traverse(function (object) {
-    if (object.isMesh) object.castShadow = true; // Включаем тени для модели
-  });
-  scene.add(model);
+loader.load(
+  "/models/cat.glb",
+  (gltf) => {
+    target = gltf.scene;
+    target.position.y = 0;
+    target.scale.set(0.5, 0.5, 0.5);
+    target.castShadow = true;
 
-  const gltfAnimations = gltf.animations;
-  const mixer = new THREE.AnimationMixer(model);
-  const animationsMap = new Map();
-  gltfAnimations.forEach((a) => {
-    animationsMap.set(a.name, mixer.clipAction(a)); // Добавляем анимации в карту
-  });
+    // Центрируем модель и настраиваем тени
+    target.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+      }
+    });
 
-  model.scale.multiplyScalar(0.1); // Масштабируем модель
-  initPlayerControls(model, mixer, animationsMap, "idle"); // Инициализируем управление персонажем
-});
+    scene.add(target);
 
-// ================================
-// ANIMATION LOOP
-// ================================
-const clock = new THREE.Clock();
-function animate() {
-  const delta = clock.getDelta(); // Получаем время с последнего кадра
-  updatePlayer(delta, keysPressed); // Обновляем состояние игрока
-  orbitControls.update(); // Обновляем управление камерой
-  renderer.render(scene, camera); // Рендерим сцену
-  requestAnimationFrame(animate); // Запрашиваем следующий кадр
+
+    
+    
+    
+    
+  },
+  undefined,
+  (error) => {
+    console.error("Error loading cat model:", error);
+    // Если модель не загрузилась, создаем куб как fallback
+    const cubeMaterials = [
+      new THREE.MeshPhongMaterial({ color: 0xff0000 }),
+      new THREE.MeshPhongMaterial({ color: 0xff0000 }),
+      new THREE.MeshPhongMaterial({ color: 0xff0000 }),
+      new THREE.MeshPhongMaterial({ color: 0xff0000 }),
+      new THREE.MeshPhongMaterial({ color: 0xffffff }),
+      new THREE.MeshPhongMaterial({ color: 0xff0000 }),
+    ];
+    target = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), cubeMaterials);
+    target.castShadow = true;
+    target.position.y = 1;
+    scene.add(target);
+  }
+);
+
+// Шахматный пол с тенями (увеличена площадь)
+function createChessboard(size, tiles) {
+  const group = new THREE.Group();
+  const tileSize = size / tiles;
+  const halfSize = size / 2;
+
+  for (let i = 0; i < tiles; i++) {
+    for (let j = 0; j < tiles; j++) {
+      const tile = new THREE.Mesh(
+        new THREE.PlaneGeometry(tileSize, tileSize),
+        new THREE.MeshPhongMaterial({
+          color: (i + j) % 2 === 0 ? 0xffffff : 0x333333,
+          side: THREE.DoubleSide,
+        })
+      );
+      tile.receiveShadow = true;
+      tile.position.x = i * tileSize - halfSize + tileSize / 2;
+      tile.position.z = j * tileSize - halfSize + tileSize / 2;
+      tile.rotation.x = -Math.PI / 2;
+      group.add(tile);
+    }
+  }
+  return group;
 }
+
+// Увеличиваем размер доски до 40x40 с 16x16 клетками
+const chessboard = createChessboard(40, 16);
+scene.add(chessboard);
+
+// Настройка управления
+const controls = new PointerLockControls(camera, renderer.domElement);
+
+// Параметры камеры
+const cameraDistance = 5;
+let cameraAngleX = Math.PI;
+let cameraAngleY = Math.PI / 4;
+
+// Управление движением (уменьшена скорость)
+const moveSpeed = 0.12;
+const rotationSpeed = 0.15;
+const keys = {
+  KeyW: false,
+  KeyA: false,
+  KeyS: false,
+  KeyD: false,
+  Space: false,
+  ShiftLeft: false,
+  ShiftRight: false,
+};
+
+// Физика
+let velocity = new THREE.Vector3();
+let isOnGround = true;
+const gravity = -0.01;
+const jumpForce = 0.15;
+
+// UI элементы
+const instructions = document.createElement("div");
+instructions.id = "instructions";
+instructions.innerHTML = `
+    <h3>Управление</h3>
+    <p>Кликните для захвата управления</p>
+    <p>WASD - движение</p>
+    <p>SPACE - прыжок</p>
+    <p>SHIFT - ускорение</p>
+    <p>ESC - выход из режима</p>
+`;
+document.body.appendChild(instructions);
+
+// Обработчики событий
+function setupEventListeners() {
+  function onPointerLockChange() {
+    if (document.pointerLockElement === renderer.domElement) {
+      controls.enabled = true;
+      instructions.style.display = "none";
+    } else {
+      controls.enabled = false;
+      instructions.style.display = "block";
+    }
+  }
+
+  document.addEventListener("pointerlockchange", onPointerLockChange);
+  document.addEventListener("click", () => {
+    renderer.domElement.requestPointerLock();
+  });
+
+  document.addEventListener("mousemove", (event) => {
+    if (!controls.enabled) return;
+
+    const movementX = event.movementX || 0;
+    const movementY = event.movementY || 0;
+
+    cameraAngleX -= movementX * 0.002;
+    cameraAngleY = THREE.MathUtils.clamp(
+      cameraAngleY + movementY * 0.002,
+      0.1,
+      Math.PI / 2 - 0.1
+    );
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.code in keys) keys[event.code] = true;
+    if (event.code === "Space" && isOnGround) {
+      velocity.y = jumpForce;
+      isOnGround = false;
+    }
+  });
+
+  document.addEventListener("keyup", (event) => {
+    if (event.code in keys) keys[event.code] = false;
+  });
+
+  window.addEventListener("resize", () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+}
+
+// Обновление позиции камеры
+function updateCamera() {
+  if (!target) return;
+
+  const x =
+    target.position.x +
+    cameraDistance * Math.sin(cameraAngleX) * Math.cos(cameraAngleY);
+  const y = target.position.y + 1 + cameraDistance * Math.sin(cameraAngleY);
+  const z =
+    target.position.z +
+    cameraDistance * Math.cos(cameraAngleX) * Math.cos(cameraAngleY);
+
+  camera.position.set(x, y, z);
+  camera.lookAt(target.position.x, target.position.y + 1, target.position.z);
+}
+
+// Обработка движения
+function handleMovement(delta) {
+  if (!target) return;
+
+  const forward = new THREE.Vector3(
+    Math.sin(cameraAngleX),
+    0,
+    Math.cos(cameraAngleX)
+  ).normalize();
+
+  const right = new THREE.Vector3(
+    Math.sin(cameraAngleX + Math.PI / 2),
+    0,
+    Math.cos(cameraAngleX + Math.PI / 2)
+  ).normalize();
+
+  const direction = new THREE.Vector3();
+  if (keys.KeyW) direction.sub(forward);
+  if (keys.KeyS) direction.add(forward);
+  if (keys.KeyA) direction.sub(right);
+  if (keys.KeyD) direction.add(right);
+
+  const speedMultiplier = keys.ShiftLeft || keys.ShiftRight ? 1.5 : 1;
+
+  if (direction.length() > 0) {
+    direction.normalize();
+    let targetRotation = Math.atan2(direction.x, direction.z);
+
+    // Вычисляем разницу между текущим и целевым углом
+    let angleDifference = targetRotation - target.rotation.y;
+
+    // Нормализуем разницу в диапазон [-π, π]
+    while (angleDifference > Math.PI) angleDifference -= Math.PI * 2;
+    while (angleDifference < -Math.PI) angleDifference += Math.PI * 2;
+
+    // Плавный поворот
+    target.rotation.y += angleDifference * rotationSpeed;
+
+    velocity.x = direction.x * moveSpeed * speedMultiplier;
+    velocity.z = direction.z * moveSpeed * speedMultiplier;
+  } else {
+    velocity.x *= 0.9;
+    velocity.z *= 0.9;
+  }
+
+  velocity.y += gravity;
+
+  if (target.position.y <= 0) {
+    target.position.y = 0;
+    velocity.y = 0;
+    isOnGround = true;
+  }
+
+  target.position.add(velocity);
+
+  // Увеличены границы движения в соответствии с размером доски
+  target.position.x = THREE.MathUtils.clamp(target.position.x, -20, 20);
+  target.position.z = THREE.MathUtils.clamp(target.position.z, -20, 20);
+}
+
+// Анимация
+let lastTime = 0;
+function animate(time) {
+  const delta = (time - lastTime) / 1000;
+  lastTime = time;
+
+  handleMovement(delta);
+  updateCamera();
+  renderer.render(scene, camera);
+
+  requestAnimationFrame(animate);
+}
+
+// Инициализация
+setupEventListeners();
 animate();
