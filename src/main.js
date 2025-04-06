@@ -2,13 +2,24 @@ import * as THREE from "three";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
+import Stats from "stats.js";
+
+const stats = new Stats();
+stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
+document.body.appendChild(stats.dom);
+
 // ========== НАСТРОЙКИ ==========
+
+let floor;
+const SIZE_FLOOR = 256;
+
 const SETTINGS = {
   // Коэффициенты скорости анимаций
   ANIMATION_SPEED: {
     IDLE: 1.0,
     WALK: 1.2,
     RUN: 1.5,
+    JUMP: 1.0,
   },
 
   // Параметры движения
@@ -52,6 +63,7 @@ camera.position.set(0, 5, 5);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
+
 document.body.appendChild(renderer.domElement);
 
 // Освещение
@@ -64,27 +76,19 @@ directionalLight.position.set(1, 10, 1);
 directionalLight.castShadow = true;
 
 // Настройки теней для покрытия всей площади пола
-directionalLight.shadow.mapSize.width = 1024; // Высокое разрешение тени
-directionalLight.shadow.mapSize.height = 1024;
+directionalLight.shadow.mapSize.width = 8192; // Высокое разрешение тени
+directionalLight.shadow.mapSize.height = 8192;
 
-// Увеличиваем область видимости камеры теней
 directionalLight.shadow.camera.near = 0.5;
-directionalLight.shadow.camera.far = 50;
-directionalLight.shadow.camera.left = -30; // Увеличиваем влево
-directionalLight.shadow.camera.right = 30; // Увеличиваем вправо
-directionalLight.shadow.camera.top = 30; // Увеличиваем вверх
-directionalLight.shadow.camera.bottom = -30; // Увеличиваем вниз
-
-// Уменьшаем артефакты теней
-directionalLight.shadow.bias = -0.001;
-directionalLight.shadow.normalBias = 0.05;
-
+directionalLight.shadow.camera.far = 500;
+directionalLight.shadow.camera.left = -250;
+directionalLight.shadow.camera.right = 250;
+directionalLight.shadow.camera.top = 250;
+directionalLight.shadow.camera.bottom = -250;
 scene.add(directionalLight);
 
-// Добавим заполняющий свет с противоположной стороны
-const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
-fillLight.position.set(-1, 0.5, -1);
-scene.add(fillLight);
+const shadowHelper = new THREE.CameraHelper(directionalLight.shadow.camera);
+scene.add(shadowHelper);
 
 // Модель кота
 let target;
@@ -124,18 +128,21 @@ loader.load(
     const clipIdle = THREE.AnimationClip.findByName(clips, "idle") || clips[0];
     const clipWalk = THREE.AnimationClip.findByName(clips, "walk") || clips[0];
     const clipRun = THREE.AnimationClip.findByName(clips, "run") || clipWalk;
+    const clipJump = THREE.AnimationClip.findByName(clips, "jump") || clipRun;
 
     // Создаем действия
     actions = {
       idle: mixer.clipAction(clipIdle),
       walk: mixer.clipAction(clipWalk),
       run: mixer.clipAction(clipRun),
+      jump: mixer.clipAction(clipJump),
     };
 
     // Настройка анимаций
     actions.idle.setEffectiveTimeScale(SETTINGS.ANIMATION_SPEED.IDLE);
     actions.walk.setEffectiveTimeScale(SETTINGS.ANIMATION_SPEED.WALK);
     actions.run.setEffectiveTimeScale(SETTINGS.ANIMATION_SPEED.RUN);
+    actions.jump.setEffectiveTimeScale(SETTINGS.ANIMATION_SPEED.JUMP);
 
     Object.values(actions).forEach((action) => {
       action.setEffectiveWeight(1);
@@ -177,37 +184,35 @@ function setAction(actionName) {
   currentAction = actionName;
 }
 
-// Шахматный пол с тенями
-function createChessboard(size, tiles) {
-  const group = new THREE.Group();
-  const tileSize = size / tiles;
-  const halfSize = size / 2;
+function addFloor() {
+  let size = 50;
+  let repeat = 32;
 
-  for (let i = 0; i < tiles; i++) {
-    for (let j = 0; j < tiles; j++) {
-      const tile = new THREE.Mesh(
-        new THREE.PlaneGeometry(tileSize, tileSize),
-        new THREE.MeshStandardMaterial({
-          color: (i + j) % 2 === 0 ? 0xffffff : 0x333333,
-          side: THREE.DoubleSide,
-          roughness: 0.6,
-          metalness: 0.0,
-        })
-      );
-      tile.receiveShadow = true; // Важно: пол должен получать тени
-      tile.position.x = i * tileSize - halfSize + tileSize / 2;
-      tile.position.z = j * tileSize - halfSize + tileSize / 2;
-      tile.rotation.x = -Math.PI / 2;
-      group.add(tile);
-    }
-  }
-  return group;
+  const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+
+  const floorT = new THREE.TextureLoader().load("textures/floor.jpg");
+  floorT.colorSpace = THREE.SRGBColorSpace;
+  floorT.repeat.set(repeat, repeat);
+  floorT.wrapS = floorT.wrapT = THREE.RepeatWrapping;
+  floorT.anisotropy = maxAnisotropy;
+
+  let mat = new THREE.MeshStandardMaterial({
+    map: floorT,
+    normalScale: new THREE.Vector2(0.5, 0.5),
+    color: 0xffffff,
+    depthWrite: false,
+    roughness: 0.85,
+  });
+
+  let g = new THREE.PlaneGeometry(size * 10, size * 10, 50, 50);
+  g.rotateX(-Math.PI / 2);
+
+  floor = new THREE.Mesh(g, mat);
+  floor.receiveShadow = true;
+  scene.add(floor);
 }
 
-// Создаем доску большего размера (40x40 единиц с 16x16 клетками)
-const SIZE_FLOOR = 256;
-const chessboard = createChessboard(SIZE_FLOOR, 64);
-scene.add(chessboard);
+addFloor();
 
 // Настройка управления
 const controls = new PointerLockControls(camera, renderer.domElement);
@@ -234,6 +239,8 @@ const keys = {
 let velocity = new THREE.Vector3();
 let isOnGround = true;
 let canJump = true;
+let isJumping = false; // Добавляем флаг прыжка
+let jumpStartTime = 0; // Время начала прыжка
 
 // UI элементы
 const instructions = document.createElement("div");
@@ -297,6 +304,8 @@ function setupEventListeners() {
       velocity.y = SETTINGS.MOVEMENT.JUMP_FORCE;
       isOnGround = false;
       canJump = false;
+      isJumping = true; // Устанавливаем флаг прыжка
+      setAction("jump"); // Включаем анимацию прыжка
 
       // Задержка перед следующим прыжком
       setTimeout(() => {
@@ -458,6 +467,7 @@ function animate(time) {
   renderer.render(scene, camera);
 
   requestAnimationFrame(animate);
+  stats.update();
 }
 
 // Инициализация

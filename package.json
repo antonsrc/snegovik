@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "stats.js": "^0.17.0",
     "three": "^0.175.0"
   },
   "devDependencies": {
