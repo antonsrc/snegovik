@@ -5,24 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Snegovik</title>
     <style>
-      body { margin: 0; overflow: hidden; }
-      canvas { display: block; }
-      #instructions {
-          position: absolute;
-          top: 20px;
-          left: 50%;
-          transform: translateX(-50%);
-          color: white;
-          background-color: rgba(0,0,0,0.5);
-          padding: 10px 20px;
-          border-radius: 5px;
-          font-family: Arial, sans-serif;
+      body {
+        margin: 0;
+        overflow: hidden;
       }
-  </style>
+      canvas {
+        display: block;
+      }
+      #instructions {
+        position: absolute;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: white;
+        background-color: rgba(0, 0, 0, 0.5);
+        padding: 10px 20px;
+        border-radius: 5px;
+        font-family: Arial, sans-serif;
+      }
+    </style>
   </head>
   <body>
-    <div id="instructions">Click to lock controls. WASD to move. Move mouse to rotate camera. Press ESC to exit.</div>
-    
     <script type="module" src="src/main.js"></script>
   </body>
 </html>

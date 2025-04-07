@@ -1,20 +1,9 @@
 import * as THREE from "three";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-
 import Stats from "stats.js";
 
-const stats = new Stats();
-stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
-document.body.appendChild(stats.dom);
-
-// ========== НАСТРОЙКИ ==========
-
-let floor;
-const SIZE_FLOOR = 256;
-
 const SETTINGS = {
-  // Коэффициенты скорости анимаций
   ANIMATION_SPEED: {
     IDLE: 1.0,
     WALK: 1.2,
@@ -22,7 +11,6 @@ const SETTINGS = {
     JUMP: 1.0,
   },
 
-  // Параметры движения
   MOVEMENT: {
     WALK_SPEED: 0.15,
     RUN_SPEED: 0.25,
@@ -31,24 +19,45 @@ const SETTINGS = {
     GRAVITY: -0.02,
   },
 
-  // Параметры камеры
   CAMERA: {
     DISTANCE: {
-      MIN: 3, // Минимальное расстояние
-      MAX: 10, // Максимальное расстояние
-      DEFAULT: 5, // Расстояние по умолчанию
+      MIN: 3,
+      MAX: 10,
+      DEFAULT: 5,
       ZOOM_SPEED: 0.5, // Скорость изменения расстояния
       LERP_FACTOR: 0.1, // Плавность интерполяции
     },
     MIN_ANGLE_Y: 0.1,
     MAX_ANGLE_Y: Math.PI / 2 - 0.1,
   },
-};
-// ===============================
 
-// Сцена
+  SIZE_FLOOR: 256,
+};
+
+const keys = {
+  KeyW: false,
+  KeyA: false,
+  KeyS: false,
+  KeyD: false,
+  Space: false,
+  ShiftLeft: false,
+  ShiftRight: false,
+};
+
+let clock = new THREE.Clock();
+
+const stats = new Stats();
+stats.showPanel(0);
+document.body.appendChild(stats.dom);
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x333333);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.setAnimationLoop(animate);
+document.body.appendChild(renderer.domElement);
 
 // Камера
 const camera = new THREE.PerspectiveCamera(
@@ -58,13 +67,6 @@ const camera = new THREE.PerspectiveCamera(
   1000
 );
 camera.position.set(0, 5, 5);
-
-// Рендерер
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
-
-document.body.appendChild(renderer.domElement);
 
 // Освещение
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); // Мягкий белый свет
@@ -170,48 +172,6 @@ loader.load(
   }
 );
 
-// Функция для переключения анимаций
-function setAction(actionName) {
-  if (currentAction === actionName || !actions[actionName]) return;
-
-  if (currentAction) {
-    // Плавное затухание текущей анимации
-    actions[currentAction].fadeOut(0.2);
-  }
-
-  // Плавное появление новой анимации
-  actions[actionName].reset().fadeIn(0.2).play();
-  currentAction = actionName;
-}
-
-function addFloor() {
-  let size = 50;
-  let repeat = 32;
-
-  const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
-
-  const floorT = new THREE.TextureLoader().load("textures/floor.jpg");
-  floorT.colorSpace = THREE.SRGBColorSpace;
-  floorT.repeat.set(repeat, repeat);
-  floorT.wrapS = floorT.wrapT = THREE.RepeatWrapping;
-  floorT.anisotropy = maxAnisotropy;
-
-  let mat = new THREE.MeshStandardMaterial({
-    map: floorT,
-    normalScale: new THREE.Vector2(0.5, 0.5),
-    color: 0xffffff,
-    depthWrite: false,
-    roughness: 0.85,
-  });
-
-  let g = new THREE.PlaneGeometry(size * 10, size * 10, 50, 50);
-  g.rotateX(-Math.PI / 2);
-
-  floor = new THREE.Mesh(g, mat);
-  floor.receiveShadow = true;
-  scene.add(floor);
-}
-
 addFloor();
 
 // Настройка управления
@@ -224,36 +184,25 @@ let cameraAngleY = Math.PI / 4;
 let currentCameraDistance = SETTINGS.CAMERA.DISTANCE.DEFAULT; // Текущее расстояние
 let targetCameraDistance = SETTINGS.CAMERA.DISTANCE.DEFAULT; // Целевое расстояние
 
-// Управление движением
-const keys = {
-  KeyW: false,
-  KeyA: false,
-  KeyS: false,
-  KeyD: false,
-  Space: false,
-  ShiftLeft: false,
-  ShiftRight: false,
-};
-
 // Физика
 let velocity = new THREE.Vector3();
 let isOnGround = true;
 let canJump = true;
-let isJumping = false; // Добавляем флаг прыжка
-let jumpStartTime = 0; // Время начала прыжка
 
 // UI элементы
 const instructions = document.createElement("div");
 instructions.id = "instructions";
 instructions.innerHTML = `
+    <h1>Кликните для начала игры</h1>
     <h3>Управление</h3>
-    <p>Кликните для захвата управления</p>
     <p>WASD - движение</p>
     <p>SPACE - прыжок</p>
     <p>SHIFT - ускорение</p>
-    <p>ESC - выход из режима</p>
+    <p>ESC - выход</p>
 `;
 document.body.appendChild(instructions);
+
+setupEventListeners();
 
 // Обработчики событий
 function setupEventListeners() {
@@ -304,13 +253,12 @@ function setupEventListeners() {
       velocity.y = SETTINGS.MOVEMENT.JUMP_FORCE;
       isOnGround = false;
       canJump = false;
-      isJumping = true; // Устанавливаем флаг прыжка
       setAction("jump"); // Включаем анимацию прыжка
 
       // Задержка перед следующим прыжком
       setTimeout(() => {
         canJump = true;
-      }, 300);
+      }, 500);
     }
   });
 
@@ -340,6 +288,13 @@ function setupEventListeners() {
 
 // Обновление позиции камеры
 function updateCamera() {
+  // Плавное изменение расстояния камеры
+  currentCameraDistance = THREE.MathUtils.lerp(
+    currentCameraDistance,
+    targetCameraDistance,
+    SETTINGS.CAMERA.DISTANCE.LERP_FACTOR
+  );
+
   if (!target) return;
   const x =
     target.position.x +
@@ -377,7 +332,7 @@ function handleMovement(delta) {
   if (keys.KeyD) direction.add(right);
 
   // Определяем текущее действие
-  if (direction.length() > 0) {
+  if (direction.length() > 0 && isOnGround) {
     const isRunning = keys.ShiftLeft || keys.ShiftRight;
     setAction(isRunning ? "run" : "walk");
 
@@ -386,6 +341,9 @@ function handleMovement(delta) {
       ? SETTINGS.ANIMATION_SPEED.RUN
       : SETTINGS.ANIMATION_SPEED.WALK;
     actions[currentAction].setEffectiveTimeScale(targetSpeed);
+  } else if (isOnGround == false) {
+    // console.log('прыг')
+    setAction("jump");
   } else {
     setAction("idle");
     actions.idle.setEffectiveTimeScale(SETTINGS.ANIMATION_SPEED.IDLE);
@@ -436,40 +394,67 @@ function handleMovement(delta) {
   // Ограничиваем движение в пределах игровой области
   target.position.x = THREE.MathUtils.clamp(
     target.position.x,
-    -SIZE_FLOOR / 2,
-    SIZE_FLOOR / 2
+    -SETTINGS.SIZE_FLOOR / 2,
+    SETTINGS.SIZE_FLOOR / 2
   );
   target.position.z = THREE.MathUtils.clamp(
     target.position.z,
-    -SIZE_FLOOR / 2,
-    SIZE_FLOOR / 2
+    -SETTINGS.SIZE_FLOOR / 2,
+    SETTINGS.SIZE_FLOOR / 2
   );
 
   // Обновляем микшер анимаций
   mixer.update(delta);
 }
 
-// Анимация
-let lastTime = 0;
 function animate(time) {
-  const delta = (time - lastTime) / 1000;
-  lastTime = time;
-
-  // Плавное изменение расстояния камеры
-  currentCameraDistance = THREE.MathUtils.lerp(
-    currentCameraDistance,
-    targetCameraDistance,
-    SETTINGS.CAMERA.DISTANCE.LERP_FACTOR
-  );
+  const delta = clock.getDelta();
 
   handleMovement(delta);
   updateCamera();
-  renderer.render(scene, camera);
 
-  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
   stats.update();
 }
 
-// Инициализация
-setupEventListeners();
-animate();
+function addFloor() {
+  let size = 50;
+  let repeat = 32;
+
+  const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+
+  const floorT = new THREE.TextureLoader().load("textures/floor.jpg");
+  floorT.colorSpace = THREE.SRGBColorSpace;
+  floorT.repeat.set(repeat, repeat);
+  floorT.wrapS = floorT.wrapT = THREE.RepeatWrapping;
+  floorT.anisotropy = maxAnisotropy;
+
+  let mat = new THREE.MeshStandardMaterial({
+    map: floorT,
+    normalScale: new THREE.Vector2(0.5, 0.5),
+    color: 0xffffff,
+    depthWrite: false,
+    roughness: 0.85,
+  });
+
+  let g = new THREE.PlaneGeometry(size * 10, size * 10, 50, 50);
+  g.rotateX(-Math.PI / 2);
+
+  const floor = new THREE.Mesh(g, mat);
+  floor.receiveShadow = true;
+  scene.add(floor);
+}
+
+// Функция для переключения анимаций
+function setAction(actionName) {
+  if (currentAction === actionName || !actions[actionName]) return;
+
+  if (currentAction) {
+    // Плавное затухание текущей анимации
+    actions[currentAction].fadeOut(0.2);
+  }
+
+  // Плавное появление новой анимации
+  actions[actionName].reset().fadeIn(0.2).play();
+  currentAction = actionName;
+}
