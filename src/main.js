@@ -30,9 +30,9 @@ const SETTINGS = {
     MIN_ANGLE_Y: 0.1,
     MAX_ANGLE_Y: Math.PI / 2 - 0.1,
   },
-
-  SIZE_FLOOR: 256,
 };
+
+const SIZE_FLOOR = 256;
 
 const keys = {
   KeyW: false,
@@ -59,7 +59,6 @@ renderer.shadowMap.enabled = true;
 renderer.setAnimationLoop(animate);
 document.body.appendChild(renderer.domElement);
 
-// Камера
 const camera = new THREE.PerspectiveCamera(
   75,
   window.innerWidth / window.innerHeight,
@@ -68,111 +67,72 @@ const camera = new THREE.PerspectiveCamera(
 );
 camera.position.set(0, 5, 5);
 
-// Освещение
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); // Мягкий белый свет
+const ambientLight = new THREE.AmbientLight(0xffffff, 1);
 scene.add(ambientLight);
 
-// Основной направленный свет - сделаем его мягче
-const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-directionalLight.position.set(1, 10, 1);
+const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+directionalLight.position.set(1, 20, 1);
 directionalLight.castShadow = true;
-
-// Настройки теней для покрытия всей площади пола
-directionalLight.shadow.mapSize.width = 8192; // Высокое разрешение тени
+directionalLight.shadow.mapSize.width = 8192;
 directionalLight.shadow.mapSize.height = 8192;
-
 directionalLight.shadow.camera.near = 0.5;
-directionalLight.shadow.camera.far = 500;
-directionalLight.shadow.camera.left = -250;
-directionalLight.shadow.camera.right = 250;
-directionalLight.shadow.camera.top = 250;
-directionalLight.shadow.camera.bottom = -250;
+directionalLight.shadow.camera.far = SIZE_FLOOR * 2;
+directionalLight.shadow.camera.left = -SIZE_FLOOR;
+directionalLight.shadow.camera.right = SIZE_FLOOR;
+directionalLight.shadow.camera.top = SIZE_FLOOR;
+directionalLight.shadow.camera.bottom = -SIZE_FLOOR;
 scene.add(directionalLight);
 
 const shadowHelper = new THREE.CameraHelper(directionalLight.shadow.camera);
 scene.add(shadowHelper);
 
+setupEventListeners();
+addFloor();
+
 // Модель кота
-let target;
+let modelCat;
 let mixer;
 let actions = {};
 let currentAction = "";
 
 const loader = new GLTFLoader();
-loader.load(
-  "/models/cat.glb",
-  (gltf) => {
-    target = gltf.scene;
-    target.position.y = 0;
-    target.scale.set(0.5, 0.5, 0.5);
-    target.castShadow = true;
+loader.load("/models/cat.glb", (gltf) => {
+  modelCat = gltf.scene;
+  modelCat.position.y = 0;
+  modelCat.scale.set(0.5, 0.5, 0.5);
+  modelCat.castShadow = true;
 
-    // Центрируем модель и настраиваем материалы для матового вида
-    target.traverse((child) => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        // Заменяем материалы на матовые
-        if (child.material) {
-          child.material = new THREE.MeshStandardMaterial({
-            color: child.material.color,
-            roughness: 0.8, // Увеличиваем шероховатость для матовости
-            metalness: 0.1, // Уменьшаем металличность
-          });
-        }
-      }
-    });
+  // Инициализация анимаций
+  mixer = new THREE.AnimationMixer(modelCat);
 
-    // Инициализация анимаций
-    mixer = new THREE.AnimationMixer(target);
+  // Находим нужные анимации
+  const clips = gltf.animations;
+  const clipIdle = THREE.AnimationClip.findByName(clips, "idle");
+  const clipWalk = THREE.AnimationClip.findByName(clips, "walk");
+  const clipRun = THREE.AnimationClip.findByName(clips, "run");
+  const clipJump = THREE.AnimationClip.findByName(clips, "jump");
 
-    // Находим нужные анимации
-    const clips = gltf.animations;
-    const clipIdle = THREE.AnimationClip.findByName(clips, "idle") || clips[0];
-    const clipWalk = THREE.AnimationClip.findByName(clips, "walk") || clips[0];
-    const clipRun = THREE.AnimationClip.findByName(clips, "run") || clipWalk;
-    const clipJump = THREE.AnimationClip.findByName(clips, "jump") || clipRun;
+  // Создаем действия
+  actions = {
+    idle: mixer.clipAction(clipIdle),
+    walk: mixer.clipAction(clipWalk),
+    run: mixer.clipAction(clipRun),
+    jump: mixer.clipAction(clipJump),
+  };
 
-    // Создаем действия
-    actions = {
-      idle: mixer.clipAction(clipIdle),
-      walk: mixer.clipAction(clipWalk),
-      run: mixer.clipAction(clipRun),
-      jump: mixer.clipAction(clipJump),
-    };
+  // Настройка анимаций
+  actions.idle.setEffectiveTimeScale(SETTINGS.ANIMATION_SPEED.IDLE);
+  actions.walk.setEffectiveTimeScale(SETTINGS.ANIMATION_SPEED.WALK);
+  actions.run.setEffectiveTimeScale(SETTINGS.ANIMATION_SPEED.RUN);
+  actions.jump.setEffectiveTimeScale(SETTINGS.ANIMATION_SPEED.JUMP);
 
-    // Настройка анимаций
-    actions.idle.setEffectiveTimeScale(SETTINGS.ANIMATION_SPEED.IDLE);
-    actions.walk.setEffectiveTimeScale(SETTINGS.ANIMATION_SPEED.WALK);
-    actions.run.setEffectiveTimeScale(SETTINGS.ANIMATION_SPEED.RUN);
-    actions.jump.setEffectiveTimeScale(SETTINGS.ANIMATION_SPEED.JUMP);
+  Object.values(actions).forEach((action) => {
+    action.setEffectiveWeight(1);
+    action.setLoop(THREE.LoopRepeat, Infinity);
+  });
 
-    Object.values(actions).forEach((action) => {
-      action.setEffectiveWeight(1);
-      action.setLoop(THREE.LoopRepeat, Infinity);
-    });
-
-    // Запускаем анимацию покоя по умолчанию
-    setAction("idle");
-
-    scene.add(target);
-  },
-  undefined,
-  (error) => {
-    console.error("Error loading cat model:", error);
-    // Fallback куб с матовым материалом
-    const matMaterial = new THREE.MeshStandardMaterial({
-      color: 0xff0000,
-      roughness: 0.7,
-      metalness: 0.1,
-    });
-    target = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), matMaterial);
-    target.castShadow = true;
-    target.position.y = 1;
-    scene.add(target);
-  }
-);
-
-addFloor();
+  scene.add(modelCat);
+});
 
 // Настройка управления
 const controls = new PointerLockControls(camera, renderer.domElement);
@@ -202,9 +162,6 @@ instructions.innerHTML = `
 `;
 document.body.appendChild(instructions);
 
-setupEventListeners();
-
-// Обработчики событий
 function setupEventListeners() {
   function onPointerLockChange() {
     if (document.pointerLockElement === renderer.domElement) {
@@ -235,7 +192,6 @@ function setupEventListeners() {
     );
   });
 
-  // Обработка колесика мыши для приближения/отдаления
   document.addEventListener("wheel", (event) => {
     targetCameraDistance = THREE.MathUtils.clamp(
       targetCameraDistance -
@@ -295,23 +251,27 @@ function updateCamera() {
     SETTINGS.CAMERA.DISTANCE.LERP_FACTOR
   );
 
-  if (!target) return;
+  if (!modelCat) return;
   const x =
-    target.position.x +
+    modelCat.position.x +
     currentCameraDistance * Math.sin(cameraAngleX) * Math.cos(cameraAngleY);
   const y =
-    target.position.y + 1 + currentCameraDistance * Math.sin(cameraAngleY);
+    modelCat.position.y + 1 + currentCameraDistance * Math.sin(cameraAngleY);
   const z =
-    target.position.z +
+    modelCat.position.z +
     currentCameraDistance * Math.cos(cameraAngleX) * Math.cos(cameraAngleY);
 
   camera.position.set(x, y, z);
-  camera.lookAt(target.position.x, target.position.y + 2, target.position.z);
+  camera.lookAt(
+    modelCat.position.x,
+    modelCat.position.y + 2,
+    modelCat.position.z
+  );
 }
 
 // Обработка движения
 function handleMovement(delta) {
-  if (!target || !mixer) return;
+  if (!modelCat || !mixer) return;
 
   const forward = new THREE.Vector3(
     Math.sin(cameraAngleX),
@@ -358,11 +318,11 @@ function handleMovement(delta) {
     direction.normalize();
     let targetRotation = Math.atan2(direction.x, direction.z);
 
-    let angleDifference = targetRotation - target.rotation.y;
+    let angleDifference = targetRotation - modelCat.rotation.y;
     while (angleDifference > Math.PI) angleDifference -= Math.PI * 2;
     while (angleDifference < -Math.PI) angleDifference += Math.PI * 2;
 
-    target.rotation.y += angleDifference * SETTINGS.MOVEMENT.ROTATION_SPEED;
+    modelCat.rotation.y += angleDifference * SETTINGS.MOVEMENT.ROTATION_SPEED;
 
     velocity.x = direction.x * SETTINGS.MOVEMENT.WALK_SPEED * speedMultiplier;
     velocity.z = direction.z * SETTINGS.MOVEMENT.WALK_SPEED * speedMultiplier;
@@ -376,8 +336,8 @@ function handleMovement(delta) {
   velocity.y += SETTINGS.MOVEMENT.GRAVITY;
 
   // Проверка нахождения на земле
-  if (target.position.y <= 0) {
-    target.position.y = 0;
+  if (modelCat.position.y <= 0) {
+    modelCat.position.y = 0;
     velocity.y = 0;
     isOnGround = true;
   } else {
@@ -389,18 +349,18 @@ function handleMovement(delta) {
   }
 
   // Применяем движение
-  target.position.add(velocity);
+  modelCat.position.add(velocity);
 
   // Ограничиваем движение в пределах игровой области
-  target.position.x = THREE.MathUtils.clamp(
-    target.position.x,
-    -SETTINGS.SIZE_FLOOR / 2,
-    SETTINGS.SIZE_FLOOR / 2
+  modelCat.position.x = THREE.MathUtils.clamp(
+    modelCat.position.x,
+    -SIZE_FLOOR / 2,
+    SIZE_FLOOR / 2
   );
-  target.position.z = THREE.MathUtils.clamp(
-    target.position.z,
-    -SETTINGS.SIZE_FLOOR / 2,
-    SETTINGS.SIZE_FLOOR / 2
+  modelCat.position.z = THREE.MathUtils.clamp(
+    modelCat.position.z,
+    -SIZE_FLOOR / 2,
+    SIZE_FLOOR / 2
   );
 
   // Обновляем микшер анимаций
