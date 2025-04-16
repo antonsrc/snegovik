@@ -1,38 +1,21 @@
 import * as THREE from "three";
-import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
 import Stats from "stats.js";
 
-const SETTINGS = {
-  ANIMATION_SPEED: {
-    IDLE: 1.0,
-    WALK: 1.2,
-    RUN: 1.5,
-    JUMP: 1.0,
-  },
+let renderer, pointerLockControls, actions, group, model, mixer, shadowHelper;
 
-  MOVEMENT: {
-    WALK_SPEED: 0.15,
-    RUN_SPEED: 0.25,
-    ROTATION_SPEED: 0.3,
-    JUMP_FORCE: 0.2,
-    GRAVITY: -0.02,
-  },
+const instructionsHTML = createInstructionsHTML();
 
-  CAMERA: {
-    DISTANCE: {
-      MIN: 3,
-      MAX: 10,
-      DEFAULT: 5,
-      ZOOM_SPEED: 0.5, // Скорость изменения расстояния
-      LERP_FACTOR: 0.1, // Плавность интерполяции
-    },
-    MIN_ANGLE_Y: 0.1,
-    MAX_ANGLE_Y: Math.PI / 2 - 0.1,
-  },
-};
-
-const SIZE_FLOOR = 256;
+const scene = new THREE.Scene();
+const clock = new THREE.Clock();
+const stats = new Stats();
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000
+);
 
 const keys = {
   KeyW: false,
@@ -41,237 +24,165 @@ const keys = {
   KeyD: false,
   Space: false,
   ShiftLeft: false,
-  ShiftRight: false,
 };
 
-let clock = new THREE.Clock();
+const floorSize = 256;
+const floorSizeHalf = floorSize / 2;
 
-const stats = new Stats();
-stats.showPanel(0);
-document.body.appendChild(stats.dom);
-
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x333333);
-
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
-renderer.setAnimationLoop(animate);
-document.body.appendChild(renderer.domElement);
-
-const camera = new THREE.PerspectiveCamera(
-  75,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  1000
-);
-camera.position.set(0, 5, 5);
-
-const ambientLight = new THREE.AmbientLight(0xffffff, 1);
-scene.add(ambientLight);
-
-const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-directionalLight.position.set(1, 20, 1);
-directionalLight.castShadow = true;
-directionalLight.shadow.mapSize.width = 8192;
-directionalLight.shadow.mapSize.height = 8192;
-directionalLight.shadow.camera.near = 0.5;
-directionalLight.shadow.camera.far = SIZE_FLOOR * 2;
-directionalLight.shadow.camera.left = -SIZE_FLOOR;
-directionalLight.shadow.camera.right = SIZE_FLOOR;
-directionalLight.shadow.camera.top = SIZE_FLOOR;
-directionalLight.shadow.camera.bottom = -SIZE_FLOOR;
-scene.add(directionalLight);
-
-const shadowHelper = new THREE.CameraHelper(directionalLight.shadow.camera);
-scene.add(shadowHelper);
-
-setupEventListeners();
-addFloor();
-
-// Модель кота
-let modelCat;
-let mixer;
-let actions = {};
 let currentAction = "";
 
-const loader = new GLTFLoader();
-loader.load("/models/cat.glb", (gltf) => {
-  modelCat = gltf.scene;
-  modelCat.position.y = 0;
-  modelCat.scale.set(0.5, 0.5, 0.5);
-  modelCat.castShadow = true;
+const playerVelocity = new THREE.Vector3();
+const walkSpeed = 0.2;
+const runSpeed = 0.3;
+const rotSpeed = 0.3;
+const jumpForce = 0.3;
+const gravity = 2;
 
-  // Инициализация анимаций
-  mixer = new THREE.AnimationMixer(modelCat);
-
-  // Находим нужные анимации
-  const clips = gltf.animations;
-  const clipIdle = THREE.AnimationClip.findByName(clips, "idle");
-  const clipWalk = THREE.AnimationClip.findByName(clips, "walk");
-  const clipRun = THREE.AnimationClip.findByName(clips, "run");
-  const clipJump = THREE.AnimationClip.findByName(clips, "jump");
-
-  // Создаем действия
-  actions = {
-    idle: mixer.clipAction(clipIdle),
-    walk: mixer.clipAction(clipWalk),
-    run: mixer.clipAction(clipRun),
-    jump: mixer.clipAction(clipJump),
-  };
-
-  // Настройка анимаций
-  actions.idle.setEffectiveTimeScale(SETTINGS.ANIMATION_SPEED.IDLE);
-  actions.walk.setEffectiveTimeScale(SETTINGS.ANIMATION_SPEED.WALK);
-  actions.run.setEffectiveTimeScale(SETTINGS.ANIMATION_SPEED.RUN);
-  actions.jump.setEffectiveTimeScale(SETTINGS.ANIMATION_SPEED.JUMP);
-
-  Object.values(actions).forEach((action) => {
-    action.setEffectiveWeight(1);
-    action.setLoop(THREE.LoopRepeat, Infinity);
-  });
-
-  scene.add(modelCat);
-});
-
-// Настройка управления
-const controls = new PointerLockControls(camera, renderer.domElement);
-
-// Параметры камеры
-// Параметры камеры
 let cameraAngleX = Math.PI;
 let cameraAngleY = Math.PI / 4;
-let currentCameraDistance = SETTINGS.CAMERA.DISTANCE.DEFAULT; // Текущее расстояние
-let targetCameraDistance = SETTINGS.CAMERA.DISTANCE.DEFAULT; // Целевое расстояние
+let currentCameraDistance = 10;
+let targetCameraDistance = 10;
 
-// Физика
-let velocity = new THREE.Vector3();
-let isOnGround = true;
+let playerOnFloor = true;
 let canJump = true;
 
-// UI элементы
-const instructions = document.createElement("div");
-instructions.id = "instructions";
-instructions.innerHTML = `
-    <h1>Кликните для начала игры</h1>
-    <h3>Управление</h3>
-    <p>WASD - движение</p>
-    <p>SPACE - прыжок</p>
-    <p>SHIFT - ускорение</p>
-    <p>ESC - выход</p>
-`;
-document.body.appendChild(instructions);
+init();
 
-function setupEventListeners() {
-  function onPointerLockChange() {
-    if (document.pointerLockElement === renderer.domElement) {
-      controls.enabled = true;
-      instructions.style.display = "none";
-    } else {
-      controls.enabled = false;
-      instructions.style.display = "block";
-    }
-  }
+function init() {
+  const containerHTML = document.getElementById("container");
 
+  scene.background = new THREE.Color(0x333333);
+
+  group = new THREE.Group();
+  scene.add(group);
+
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+  scene.add(ambientLight);
+
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
+  directionalLight.position.set(1, 25, 3);
+  directionalLight.castShadow = true;
+  directionalLight.shadow.camera.near = 0.5;
+  directionalLight.shadow.camera.far = 500;
+  directionalLight.shadow.camera.right = floorSizeHalf;
+  directionalLight.shadow.camera.left = -floorSizeHalf;
+  directionalLight.shadow.camera.top = floorSizeHalf;
+  directionalLight.shadow.camera.bottom = -floorSizeHalf;
+  directionalLight.shadow.mapSize.width = 2048 * 1;
+  directionalLight.shadow.mapSize.height = 2048 * 1;
+  directionalLight.shadow.bias = -0.001;
+  scene.add(directionalLight);
+
+  shadowHelper = new THREE.CameraHelper(directionalLight.shadow.camera);
+  shadowHelper.visible = false; // Отключаем по умолчанию
+  scene.add(shadowHelper);
+
+  stats.showPanel(0);
+  containerHTML.appendChild(stats.domElement);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setAnimationLoop(animate);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  containerHTML.appendChild(renderer.domElement);
+
+  pointerLockControls = new PointerLockControls(camera, renderer.domElement);
+
+  // EVENTS
+  window.addEventListener("resize", onWindowResize);
+  document.addEventListener("keydown", onKeyDown);
+  document.addEventListener("keyup", onKeyUp);
   document.addEventListener("pointerlockchange", onPointerLockChange);
-  document.addEventListener("click", () => {
-    renderer.domElement.requestPointerLock();
+  document.addEventListener("click", onClick);
+  document.addEventListener("mousemove", onMouseMove);
+  document.addEventListener("wheel", onWheel);
+
+  addModel();
+  addFloor();
+}
+
+function addFloor() {
+  let repeat = floorSize / 8;
+
+  const floorT = new THREE.TextureLoader().load("textures/floor.jpg");
+  floorT.colorSpace = THREE.SRGBColorSpace;
+  floorT.repeat.set(repeat, repeat);
+  floorT.wrapS = floorT.wrapT = THREE.RepeatWrapping;
+  floorT.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+  let mat = new THREE.MeshStandardMaterial({
+    map: floorT,
+    normalScale: new THREE.Vector2(0.5, 0.5),
+    color: 0xffffff,
+    depthWrite: false,
+    roughness: 0.85,
   });
 
-  document.addEventListener("mousemove", (event) => {
-    if (!controls.enabled) return;
+  let g = new THREE.PlaneGeometry(floorSize, floorSize, 100, 100);
+  g.rotateX(-Math.PI / 2);
 
-    const movementX = event.movementX || 0;
-    const movementY = event.movementY || 0;
+  const floor = new THREE.Mesh(g, mat);
+  floor.receiveShadow = true;
+  floor.position.y = -0.1;
+  scene.add(floor);
 
-    cameraAngleX -= movementX * 0.004;
-    cameraAngleY = THREE.MathUtils.clamp(
-      cameraAngleY + movementY * 0.004,
-      SETTINGS.CAMERA.MIN_ANGLE_Y,
-      SETTINGS.CAMERA.MAX_ANGLE_Y
-    );
-  });
+  return floor;
+}
 
-  document.addEventListener("wheel", (event) => {
-    targetCameraDistance = THREE.MathUtils.clamp(
-      targetCameraDistance -
-        event.deltaY * SETTINGS.CAMERA.DISTANCE.ZOOM_SPEED * 0.01,
-      SETTINGS.CAMERA.DISTANCE.MIN,
-      SETTINGS.CAMERA.DISTANCE.MAX
-    );
-  });
+function addModel() {
+  const loader = new GLTFLoader();
+  loader.load("/models/cat.glb", (gltf) => {
+    model = gltf.scene;
+    group.add(model);
+    model.position.y = 0;
 
-  document.addEventListener("keydown", (event) => {
-    if (event.code in keys) keys[event.code] = true;
+    model.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
 
-    // Обработка прыжка
-    if (event.code === "Space" && isOnGround && canJump) {
-      velocity.y = SETTINGS.MOVEMENT.JUMP_FORCE;
-      isOnGround = false;
-      canJump = false;
-      setAction("jump"); // Включаем анимацию прыжка
+    const animations = gltf.animations;
+    mixer = new THREE.AnimationMixer(model);
 
-      // Задержка перед следующим прыжком
-      setTimeout(() => {
-        canJump = true;
-      }, 500);
-    }
-  });
+    const clipIdle = THREE.AnimationClip.findByName(animations, "idle");
+    const clipWalk = THREE.AnimationClip.findByName(animations, "walk");
+    const clipRun = THREE.AnimationClip.findByName(animations, "run");
+    const clipJump = THREE.AnimationClip.findByName(animations, "jump");
 
-  document.addEventListener("keyup", (event) => {
-    if (event.code in keys) keys[event.code] = false;
+    actions = {
+      idle: mixer.clipAction(clipIdle),
+      walk: mixer.clipAction(clipWalk),
+      run: mixer.clipAction(clipRun),
+      jump: mixer.clipAction(clipJump),
+    };
 
-    // Мгновенная остановка при отпускании клавиш движения
-    if (["KeyW", "KeyA", "KeyS", "KeyD"].includes(event.code)) {
-      // Проверяем, остались ли нажатыми другие клавиши движения
-      const anyMovementKeyPressed =
-        keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD;
+    for (let a in actions) {
+      actions[a].enabled = true;
+      actions[a].setEffectiveTimeScale(1);
 
-      if (!anyMovementKeyPressed) {
-        // Если больше нет нажатых клавиш движения - мгновенно останавливаемся
-        velocity.x = 0;
-        velocity.z = 0;
+      if (a == "run") {
+        actions[a].setEffectiveTimeScale(1.5);
+      } else if (a == "walk") {
+        actions[a].setEffectiveTimeScale(1.2);
+      } else if (a == "jump") {
+        actions[a].setEffectiveTimeScale(1.5);
       }
     }
-  });
 
-  window.addEventListener("resize", () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    actions.idle.play();
   });
 }
 
-// Обновление позиции камеры
-function updateCamera() {
-  // Плавное изменение расстояния камеры
-  currentCameraDistance = THREE.MathUtils.lerp(
-    currentCameraDistance,
-    targetCameraDistance,
-    SETTINGS.CAMERA.DISTANCE.LERP_FACTOR
-  );
+function updatePlayer(delta) {
+  if (!playerOnFloor) {
+    playerVelocity.y -= gravity * delta;
+  }
 
-  if (!modelCat) return;
-  const x =
-    modelCat.position.x +
-    currentCameraDistance * Math.sin(cameraAngleX) * Math.cos(cameraAngleY);
-  const y =
-    modelCat.position.y + 1 + currentCameraDistance * Math.sin(cameraAngleY);
-  const z =
-    modelCat.position.z +
-    currentCameraDistance * Math.cos(cameraAngleX) * Math.cos(cameraAngleY);
-
-  camera.position.set(x, y, z);
-  camera.lookAt(
-    modelCat.position.x,
-    modelCat.position.y + 2,
-    modelCat.position.z
-  );
-}
-
-// Обработка движения
-function handleMovement(delta) {
-  if (!modelCat || !mixer) return;
+  if (!model || !mixer) return;
 
   const forward = new THREE.Vector3(
     Math.sin(cameraAngleX),
@@ -285,136 +196,190 @@ function handleMovement(delta) {
     Math.cos(cameraAngleX + Math.PI / 2)
   ).normalize();
 
-  const direction = new THREE.Vector3();
-  if (keys.KeyW) direction.sub(forward);
-  if (keys.KeyS) direction.add(forward);
-  if (keys.KeyA) direction.sub(right);
-  if (keys.KeyD) direction.add(right);
+  const playerDirection = new THREE.Vector3();
 
-  // Определяем текущее действие
-  if (direction.length() > 0 && isOnGround) {
-    const isRunning = keys.ShiftLeft || keys.ShiftRight;
+  if (keys.KeyW) playerDirection.sub(forward);
+  if (keys.KeyS) playerDirection.add(forward);
+  if (keys.KeyA) playerDirection.sub(right);
+  if (keys.KeyD) playerDirection.add(right);
+
+  if (playerDirection.length() > 0 && playerOnFloor) {
+    const isRunning = keys.ShiftLeft;
     setAction(isRunning ? "run" : "walk");
-
-    // Устанавливаем скорость анимации в зависимости от действия
-    const targetSpeed = isRunning
-      ? SETTINGS.ANIMATION_SPEED.RUN
-      : SETTINGS.ANIMATION_SPEED.WALK;
-    actions[currentAction].setEffectiveTimeScale(targetSpeed);
-  } else if (isOnGround == false) {
-    // console.log('прыг')
+  } else if (playerOnFloor == false) {
     setAction("jump");
   } else {
     setAction("idle");
-    actions.idle.setEffectiveTimeScale(SETTINGS.ANIMATION_SPEED.IDLE);
   }
 
-  const speedMultiplier =
-    keys.ShiftLeft || keys.ShiftRight
-      ? SETTINGS.MOVEMENT.RUN_SPEED / SETTINGS.MOVEMENT.WALK_SPEED
-      : 1;
+  const speedMultiplier = keys.ShiftLeft ? runSpeed / walkSpeed : 1;
 
-  if (direction.length() > 0) {
-    direction.normalize();
-    let targetRotation = Math.atan2(direction.x, direction.z);
+  if (playerDirection.length() > 0) {
+    playerDirection.normalize();
+    let targetRotation = Math.atan2(playerDirection.x, playerDirection.z);
 
-    let angleDifference = targetRotation - modelCat.rotation.y;
+    let angleDifference = targetRotation - model.rotation.y;
     while (angleDifference > Math.PI) angleDifference -= Math.PI * 2;
     while (angleDifference < -Math.PI) angleDifference += Math.PI * 2;
 
-    modelCat.rotation.y += angleDifference * SETTINGS.MOVEMENT.ROTATION_SPEED;
+    model.rotation.y += angleDifference * rotSpeed;
 
-    velocity.x = direction.x * SETTINGS.MOVEMENT.WALK_SPEED * speedMultiplier;
-    velocity.z = direction.z * SETTINGS.MOVEMENT.WALK_SPEED * speedMultiplier;
+    playerVelocity.x = playerDirection.x * walkSpeed * speedMultiplier;
+    playerVelocity.z = playerDirection.z * walkSpeed * speedMultiplier;
   } else {
-    // Мгновенная остановка
-    velocity.x = 0;
-    velocity.z = 0;
+    playerVelocity.x = 0;
+    playerVelocity.z = 0;
   }
 
-  // Применяем гравитацию
-  velocity.y += SETTINGS.MOVEMENT.GRAVITY;
-
-  // Проверка нахождения на земле
-  if (modelCat.position.y <= 0) {
-    modelCat.position.y = 0;
-    velocity.y = 0;
-    isOnGround = true;
+  // Проверка нахождения на земле с учетом позиции пола
+  if (model.position.y <= 0) {
+    model.position.y = 0;
+    playerVelocity.y = 0;
+    playerOnFloor = true;
   } else {
-    isOnGround = false;
+    playerOnFloor = false;
   }
 
-  if (canJump == 0) {
-    velocity.y = 5 * 2 * delta;
+  if (!canJump) {
+    playerVelocity.y = 5 * 2 * delta;
   }
 
   // Применяем движение
-  modelCat.position.add(velocity);
+  const newPosition = model.position.clone().add(playerVelocity);
 
-  // Ограничиваем движение в пределах игровой области
-  modelCat.position.x = THREE.MathUtils.clamp(
-    modelCat.position.x,
-    -SIZE_FLOOR / 2,
-    SIZE_FLOOR / 2
-  );
-  modelCat.position.z = THREE.MathUtils.clamp(
-    modelCat.position.z,
-    -SIZE_FLOOR / 2,
-    SIZE_FLOOR / 2
-  );
+  model.position.copy(newPosition);
 
-  // Обновляем микшер анимаций
   mixer.update(delta);
 }
 
-function animate(time) {
-  const delta = clock.getDelta();
+function updateCamera() {
+  currentCameraDistance = THREE.MathUtils.lerp(
+    currentCameraDistance,
+    targetCameraDistance,
+    0.1
+  );
 
-  handleMovement(delta);
-  updateCamera();
+  if (!model) return;
+  const x =
+    model.position.x +
+    currentCameraDistance * Math.sin(cameraAngleX) * Math.cos(cameraAngleY);
+  const y =
+    model.position.y + 1 + currentCameraDistance * Math.sin(cameraAngleY);
+  const z =
+    model.position.z +
+    currentCameraDistance * Math.cos(cameraAngleX) * Math.cos(cameraAngleY);
 
-  renderer.render(scene, camera);
-  stats.update();
+  camera.position.set(x, y, z);
+  camera.lookAt(model.position.x, model.position.y + 4, model.position.z);
 }
 
-function addFloor() {
-  let size = 50;
-  let repeat = 32;
-
-  const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
-
-  const floorT = new THREE.TextureLoader().load("textures/floor.jpg");
-  floorT.colorSpace = THREE.SRGBColorSpace;
-  floorT.repeat.set(repeat, repeat);
-  floorT.wrapS = floorT.wrapT = THREE.RepeatWrapping;
-  floorT.anisotropy = maxAnisotropy;
-
-  let mat = new THREE.MeshStandardMaterial({
-    map: floorT,
-    normalScale: new THREE.Vector2(0.5, 0.5),
-    color: 0xffffff,
-    depthWrite: false,
-    roughness: 0.85,
-  });
-
-  let g = new THREE.PlaneGeometry(size * 10, size * 10, 50, 50);
-  g.rotateX(-Math.PI / 2);
-
-  const floor = new THREE.Mesh(g, mat);
-  floor.receiveShadow = true;
-  scene.add(floor);
-}
-
-// Функция для переключения анимаций
 function setAction(actionName) {
   if (currentAction === actionName || !actions[actionName]) return;
 
   if (currentAction) {
-    // Плавное затухание текущей анимации
     actions[currentAction].fadeOut(0.2);
   }
 
-  // Плавное появление новой анимации
   actions[actionName].reset().fadeIn(0.2).play();
   currentAction = actionName;
+}
+
+function onKeyDown(event) {
+  if (event.code in keys) keys[event.code] = true;
+
+  if (event.code === "Space" && playerOnFloor && canJump) {
+    playerVelocity.y = jumpForce;
+    playerOnFloor = false;
+    canJump = false;
+    setAction("jump");
+
+    setTimeout(() => {
+      canJump = true;
+    }, 500);
+  }
+
+  if (event.code === "KeyH") {
+    shadowHelper.visible = !shadowHelper.visible;
+  }
+}
+
+function onKeyUp(event) {
+  if (event.code in keys) keys[event.code] = false;
+
+  if (["KeyW", "KeyA", "KeyS", "KeyD"].includes(event.code)) {
+    const anyMovementKeyPressed =
+      keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD;
+
+    if (!anyMovementKeyPressed) {
+      console.log(playerVelocity);
+      playerVelocity.x = 0;
+      playerVelocity.z = 0;
+    }
+  }
+}
+
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function onPointerLockChange() {
+  if (document.pointerLockElement === renderer.domElement) {
+    pointerLockControls.enabled = true;
+    instructionsHTML.style.display = "none";
+  } else {
+    pointerLockControls.enabled = false;
+    instructionsHTML.style.display = "block";
+  }
+}
+
+function onClick() {
+  renderer.domElement.requestPointerLock();
+}
+
+function onMouseMove(event) {
+  if (!pointerLockControls.enabled) return;
+
+  const movementX = event.movementX || 0;
+  const movementY = event.movementY || 0;
+
+  cameraAngleX -= movementX * 0.004;
+  cameraAngleY = THREE.MathUtils.clamp(
+    cameraAngleY + movementY * 0.004,
+    0.1,
+    Math.PI / 2 - 0.1
+  );
+}
+
+function onWheel(event) {
+  targetCameraDistance = THREE.MathUtils.clamp(
+    targetCameraDistance - event.deltaY * 0.01,
+    5,
+    20
+  );
+}
+
+function createInstructionsHTML() {
+  const instructionsHTML = document.createElement("div");
+  instructionsHTML.id = "instructions";
+  instructionsHTML.innerHTML = `
+      <h1>Кликните для начала игры</h1>
+      <h3>Управление</h3>
+      <p>WASD - движение</p>
+      <p>SPACE - прыжок</p>
+      <p>SHIFT - ускорение</p>
+      <p>ESC - выход</p>
+  `;
+  document.body.appendChild(instructionsHTML);
+  return instructionsHTML;
+}
+
+function animate() {
+  const delta = clock.getDelta();
+  updatePlayer(delta);
+  updateCamera();
+
+  renderer.render(scene, camera);
+  stats.update();
 }
